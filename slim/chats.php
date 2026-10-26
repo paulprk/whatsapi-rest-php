@@ -150,7 +150,7 @@ $app->get('/chats', function (Request $request, Response $response) {
                 CASE WHEN c.creado_por = :id_nombre THEN u2.nombre ELSE u1.nombre END AS nombre_otro_usuario,
                 m.texto AS ultimo_mensaje,
                 m.enviado_por AS ultimo_mensaje_enviado_por,
-                m.created_at AS fecha_ultimo_mensaje
+                DATE_FORMAT(m.created_at, \'%Y-%m-%dT%H:%i:%sZ\') AS fecha_ultimo_mensaje
              FROM chat c
              INNER JOIN usuario u1 ON u1.id = c.creado_por
              INNER JOIN usuario u2 ON u2.id = c.usuario_id
@@ -162,7 +162,7 @@ $app->get('/chats', function (Request $request, Response $response) {
                 LIMIT 1
              )
              WHERE c.creado_por = :id_creador OR c.usuario_id = :id_participante
-             ORDER BY m.created_at DESC, c.id DESC'
+             ORDER BY m.created_at DESC, m.id DESC, c.id DESC'
         );
         $stmt->execute([
             'id_nombre' => $logueado,
@@ -311,7 +311,7 @@ $obtenerHistoriaChat = function (Request $request, Response $response, array $ar
         }
 
         $stmt = $db->prepare(
-            'SELECT id, texto, created_at AS fecha_creacion, enviado_por
+            'SELECT id, texto, DATE_FORMAT(created_at, \'%Y-%m-%dT%H:%i:%sZ\') AS fecha_creacion, enviado_por
              FROM mensaje
              WHERE chat_id = :chat_id
              ORDER BY created_at DESC, id DESC

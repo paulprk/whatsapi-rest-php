@@ -103,11 +103,12 @@ function puedeAccederAUsurio($userId,$request)
 
 function parsearId($valor): ?int
 {
-    $id = filter_var($valor, FILTER_VALIDATE_INT);
-    if ($id === false || $id < 1) {
+    // Solo dígitos, sin ceros a la izquierda, sin espacios ni signo.
+    if (!is_int($valor) && !(is_string($valor) && preg_match('/^[1-9][0-9]*$/', $valor))) {
         return null;
     }
-    return $id;
+    $id = filter_var($valor, FILTER_VALIDATE_INT);   // sigue protegiendo contra desborde
+    return $id === false ? null : $id;
 }
 
 /**

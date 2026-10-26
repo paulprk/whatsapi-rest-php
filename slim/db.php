@@ -8,8 +8,11 @@ function getDB(): PDO
 
     $dsn = "mysql:host={$host};dbname={$dbname};charset=utf8mb4";
 
-    return new PDO($dsn, $user, $pass, [
+    $pdo = new PDO($dsn, $user, $pass, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     ]);
+    // las fechas (TIMESTAMP) se leen y se guardan siempre en UTC, sin depender de la zona del servidor
+    $pdo->exec("SET time_zone = '+00:00'");
+    return $pdo;
 }

@@ -20,7 +20,7 @@ $app->post('/login',function (Request $request,Response $response) {
 
     try {
         $db = getDB();
-        $stmt = $db->prepare("SELECT id,password FROM usuario WHERE username = :username");
+        $stmt = $db->prepare("SELECT id, username, nombre, password, is_admin FROM usuario WHERE username = :username");
         $stmt->execute(['username' => $data['username']]);
         $usuario = $stmt->fetch();
         if(!$usuario || !password_verify($data['password'], $usuario['password'])) {
@@ -37,7 +37,16 @@ $app->post('/login',function (Request $request,Response $response) {
             'id' => $usuario['id']
         ]);
 
-        $response->getBody()->write(json_encode(["mensaje" => "Login exitoso"], JSON_UNESCAPED_UNICODE));
+        //el token va solo en el header; en el cuerpo van los datos del usuario logueado (sin password)
+        $response->getBody()->write(json_encode([
+            "mensaje" => "Login exitoso",
+            "usuario" => [
+                "id" => (int) $usuario['id'],
+                "username" => $usuario['username'],
+                "nombre" => $usuario['nombre'],
+                "is_admin" => (int) $usuario['is_admin'],
+            ],
+        ], JSON_UNESCAPED_UNICODE));
         return $response->withStatus(200)->withHeader('Content-Type', 'application/json')->withHeader('Authorization', 'Bearer ' . $token);
 
     } catch(PDOException $e) {

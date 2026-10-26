@@ -5,10 +5,11 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Factory\AppFactory;
 
 /** @var \Slim\App $app */
+/** @var \Closure $authMiddleware */
+/** @var \Closure $authOpcional */
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/validaciones.php';
-require_once __DIR__ . '/middleware.php';
 
 $app->post('/usuarios', function (Request $request, Response $response) {
     $data = $request->getParsedBody();
@@ -44,7 +45,7 @@ $app->post('/usuarios', function (Request $request, Response $response) {
         ]);
 
         $response->getBody()->write(json_encode([
-            "message" => "Usuario creado correctamente",
+            "mensaje" => "Usuario creado correctamente",
         ]));
         return $response->withStatus(200)->withHeader('Content-Type', 'application/json');
 
@@ -56,7 +57,12 @@ $app->post('/usuarios', function (Request $request, Response $response) {
 });
 
 $app->get('/usuarios/{user_id}', function (Request $request, Response $response,array $args) {
-    $userId = (int) $args['user_id'];
+    //id estricto: solo digitos (rechaza "10abc", " 10", "+10", "010")
+    $userId = parsearId($args['user_id']);
+    if($userId === null) {
+        $response->getBody()->write(json_encode(["user_id" => "Debe ser un ID valido"], JSON_UNESCAPED_UNICODE));
+        return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+    }
 
     if(!puedeAccederAUsurio($userId,$request)) {
         $response->getBody()->write(json_encode(["error" => "No es el usuario, o no es Admin"], JSON_UNESCAPED_UNICODE));
@@ -84,7 +90,12 @@ $app->get('/usuarios/{user_id}', function (Request $request, Response $response,
 })->add($authMiddleware);
 
 $app->put('/usuarios/{user_id}', function (Request $request,Response $response,array $args) {
-    $userId = (int) $args['user_id'];
+    //id estricto: solo digitos (rechaza "10abc", " 10", "+10", "010")
+    $userId = parsearId($args['user_id']);
+    if($userId === null) {
+        $response->getBody()->write(json_encode(["user_id" => "Debe ser un ID valido"], JSON_UNESCAPED_UNICODE));
+        return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+    }
 
     //validar q sea usuario o admin
     if (!puedeAccederAUsurio($userId, $request)) {
@@ -114,9 +125,12 @@ $app->put('/usuarios/{user_id}', function (Request $request,Response $response,a
             $errores['password'] = $error;
         }
     }
+    //es_publico: acepta true/false, 1/0, "1"/"0" y "true"/"false" (misma regla que esta_bloqueado de chats)
+    $esPublicoNuevo = null;
     if(isset($data['es_publico'])) {
-        if(!in_array($data['es_publico'], [0, 1, '0', '1', true, false], true)) {
-            $errores['es_publico'] = "Debe ser 0 o 1";
+        $esPublicoNuevo = normalizarBooleano($data['es_publico']);   //1, 0 o null si no es valido
+        if($esPublicoNuevo === null) {
+            $errores['es_publico'] = "Debe ser true o false (o 1 o 0)";
         }
     }
 
@@ -139,7 +153,8 @@ $app->put('/usuarios/{user_id}', function (Request $request,Response $response,a
 
         $nombre = $data['nombre'] ?? $actual['nombre'];
         $password = isset($data['password']) ? password_hash($data['password'], PASSWORD_DEFAULT) : $actual['password'];
-        $es_publico = isset($data['es_publico']) ? (int) $data['es_publico'] : $actual['es_publico'];
+        //se usa el valor ya convertido (con (int) el texto "true" se guardaria como 0)
+        $es_publico = $esPublicoNuevo ?? $actual['es_publico'];
 
         $stmt = $db->prepare("UPDATE usuario SET nombre = :nombre, password = :password, es_publico = :es_publico WHERE id = :id");
         $stmt->execute([
@@ -179,7 +194,7 @@ $app->get('/usuarios', function (Request $request, Response $response) {
     $query = $request->getQueryParams();
     $search = $query['search'] ?? '';
     if(!is_string($search)) {
-        $response->getBody()->write(json_encode(["error" => "Debe ser texto"], JSON_UNESCAPED_UNICODE));
+        $response->getBody()->write(json_encode(["search" => "Debe ser texto"], JSON_UNESCAPED_UNICODE));
         return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
     }
     if($search !== '') {
@@ -245,7 +260,13 @@ $app->get('/usuarios', function (Request $request, Response $response) {
 
 $app->delete('/usuarios/{user_id}', function (Request $request,Response $response,array $args) {
     $esAdmin = (int) $request->getAttribute('auth_admin') === 1;
-    $userId = (int) $args['user_id'];
+
+    //id estricto: solo digitos (rechaza "10abc", " 10", "+10", "010")
+    $userId = parsearId($args['user_id']);
+    if($userId === null) {
+        $response->getBody()->write(json_encode(["user_id" => "Debe ser un ID valido"], JSON_UNESCAPED_UNICODE));
+        return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+    }
 
     //consultar si es el admin
     if(!$esAdmin) {
@@ -281,7 +302,7 @@ $app->delete('/usuarios/{user_id}', function (Request $request,Response $respons
         $response->getBody()->write(json_encode(["mensaje" => "Usuario eliminado"], JSON_UNESCAPED_UNICODE));
         return $response->withStatus(200)->withHeader('Content-Type', 'application/json');
     } catch(PDOException $e) {
-        if($db->inTransaction()) {
+        if(isset($db) && $db->inTransaction()) {
             $db->rollBack();
         }
         $response->getBody()->write(json_encode(["error" => "Error de conexion"], JSON_UNESCAPED_UNICODE));
