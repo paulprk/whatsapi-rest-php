@@ -50,7 +50,7 @@ $app->post('/usuarios', function (Request $request, Response $response) {
         return $response->withStatus(200)->withHeader('Content-Type', 'application/json');
 
     } catch (PDOException $e) {
-        $response->getBody()->write(json_encode(["error" => "Error al crear el usuario"], JSON_UNESCAPED_UNICODE));
+        $response->getBody()->write(json_encode(["base_de_datos" => "Error al crear el usuario"], JSON_UNESCAPED_UNICODE));
         return $response->withStatus(409)->withHeader('Content-Type', 'application/json'); //consultar fallo 409 o 500
     }
 
@@ -65,7 +65,7 @@ $app->get('/usuarios/{user_id}', function (Request $request, Response $response,
     }
 
     if(!puedeAccederAUsurio($userId,$request)) {
-        $response->getBody()->write(json_encode(["error" => "No es el usuario, o no es Admin"], JSON_UNESCAPED_UNICODE));
+        $response->getBody()->write(json_encode(["user_id" => "No es el usuario, o no es Admin"], JSON_UNESCAPED_UNICODE));
         return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
     }
 
@@ -76,7 +76,7 @@ $app->get('/usuarios/{user_id}', function (Request $request, Response $response,
         $perfil = $stmt->fetch();
 
         if(!$perfil) {
-            $response->getBody()->write(json_encode(["error" => "Usuario no encontrado"], JSON_UNESCAPED_UNICODE));
+            $response->getBody()->write(json_encode(["user_id" => "Usuario no encontrado"], JSON_UNESCAPED_UNICODE));
             return $response->withStatus(404)->withHeader('Content-Type', 'application/json');
         }
 
@@ -84,7 +84,7 @@ $app->get('/usuarios/{user_id}', function (Request $request, Response $response,
         return $response->withStatus(200)->withHeader('Content-Type', 'application/json');
 
     } catch(PDOException $e) {
-        $response->getBody()->write(json_encode(["error" => "Error de conexion"]));
+        $response->getBody()->write(json_encode(["base_de_datos" => "Error de conexion"]));
         return $response->withStatus(409)->withHeader('Content-Type', 'application/json');
     }
 })->add($authMiddleware);
@@ -99,7 +99,7 @@ $app->put('/usuarios/{user_id}', function (Request $request,Response $response,a
 
     //validar q sea usuario o admin
     if (!puedeAccederAUsurio($userId, $request)) {
-        $response->getBody()->write(json_encode(["error" => "No es el usuario, o no es Admin"], JSON_UNESCAPED_UNICODE));
+        $response->getBody()->write(json_encode(["user_id" => "No es el usuario, o no es Admin"], JSON_UNESCAPED_UNICODE));
         return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
     }
 
@@ -107,7 +107,7 @@ $app->put('/usuarios/{user_id}', function (Request $request,Response $response,a
 
     //validar que no esten vacios los campos
     if (!isset($data['nombre']) && !isset($data['password']) && !isset($data['es_publico'])) {
-        $response->getBody()->write(json_encode(["error" => "No hay nada que modificar"], JSON_UNESCAPED_UNICODE));
+        $response->getBody()->write(json_encode(["campos" => "No hay nada que modificar"], JSON_UNESCAPED_UNICODE));
         return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
     }
 
@@ -147,7 +147,7 @@ $app->put('/usuarios/{user_id}', function (Request $request,Response $response,a
         $actual = $stmt->fetch();
 
         if(!$actual) {
-            $response->getBody()->write(json_encode(["error" => "Usuario no encontrado"], JSON_UNESCAPED_UNICODE));
+            $response->getBody()->write(json_encode(["user_id" => "Usuario no encontrado"], JSON_UNESCAPED_UNICODE));
             return $response->withStatus(404)->withHeader('Content-Type', 'application/json');
         }
 
@@ -168,7 +168,7 @@ $app->put('/usuarios/{user_id}', function (Request $request,Response $response,a
         return $response->withStatus(200)->withHeader('Content-Type', 'application/json');
 
     } catch(PDOException $e) {
-        $response->getBody()->write(json_encode(["error" => "Error de conexion"], JSON_UNESCAPED_UNICODE));
+        $response->getBody()->write(json_encode(["base_de_datos" => "Error de conexion"], JSON_UNESCAPED_UNICODE));
         return $response->withStatus(409)->withHeader('Content-Type', 'application/json');
     }
 
@@ -199,7 +199,8 @@ $app->get('/usuarios', function (Request $request, Response $response) {
     }
     if($search !== '') {
         $condiciones[] = "(username LIKE :search OR nombre LIKE :search)";
-        $params['search'] = "%" . $search . "%";
+        //addcslashes: % y _ se buscan como texto, no como comodines de LIKE
+        $params['search'] = "%" . addcslashes($search, '%_\\') . "%";
     }
 
     //order
@@ -212,16 +213,14 @@ $app->get('/usuarios', function (Request $request, Response $response) {
     }
 
     //limit y offset
-    $limit = $query['limit'] ?? '10';
+    $limit = $query['limit'] ?? null;      //opcional: sin limit se listan todos
     $offset = $query['offset'] ?? '0';
-    if(!is_string($limit) || !ctype_digit($limit) || (int) $limit < 1 ) {
+    if($limit !== null && (!is_string($limit) || !ctype_digit($limit) || (int) $limit < 1)) {
         $errores['limit'] = "Debe ser un entero mayor a 0";
     }
     if (!is_string($offset) || !ctype_digit($offset) ) {
         $errores['offset'] = "Debe ser un entero mayor o igual a 0";
     }
-    $limit = (int) $limit;
-    $offset = (int) $offset;
 
     //imprimir errores(si hay)
     if(!empty($errores)) {
@@ -239,7 +238,14 @@ $app->get('/usuarios', function (Request $request, Response $response) {
 
     //sql 
     $where = "WHERE " . implode(" AND ",$condiciones);
-    $sql = "SELECT $columnas FROM usuario $where ORDER BY username $order LIMIT $limit OFFSET $offset";
+    $offset = (int) $offset;
+    $paginacion = "";
+    if($limit !== null) {
+        $paginacion = "LIMIT " . (int) $limit . " OFFSET $offset";
+    } elseif($offset > 0) {
+        $paginacion = "LIMIT 18446744073709551615 OFFSET $offset";      //MySQL no admite OFFSET sin LIMIT
+    }
+    $sql = "SELECT $columnas FROM usuario $where ORDER BY nombre $order $paginacion";
     
     //db
     try {
@@ -254,7 +260,7 @@ $app->get('/usuarios', function (Request $request, Response $response) {
         $response->getBody()->write(json_encode(["total" => $total, "usuarios" => $usuarios], JSON_UNESCAPED_UNICODE));
         return $response->withStatus(200)->withHeader('Content-Type', 'application/json');
     } catch(PDOException $e) {
-        $response->getBody()->write(json_encode(["error" => "Error de conexion"], JSON_UNESCAPED_UNICODE));
+        $response->getBody()->write(json_encode(["base_de_datos" => "Error de conexion"], JSON_UNESCAPED_UNICODE));
         return $response->withStatus(409)->withHeader('Content-Type', 'application/json');
 }})->add($authOpcional);
 
@@ -270,13 +276,13 @@ $app->delete('/usuarios/{user_id}', function (Request $request,Response $respons
 
     //consultar si es el admin
     if(!$esAdmin) {
-        $response->getBody()->write(json_encode(["error" => "No es admin"], JSON_UNESCAPED_UNICODE));
+        $response->getBody()->write(json_encode(["user_id" => "No es admin"], JSON_UNESCAPED_UNICODE));
         return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
     }
 
     //admin no se pueda borrar a si mismo
     if($userId === (int) $request->getAttribute('auth_id')) {
-        $response->getBody()->write(json_encode(["error" => "Un administrador no puede eliminarse a si mismo"], JSON_UNESCAPED_UNICODE));
+        $response->getBody()->write(json_encode(["user_id" => "Un administrador no puede eliminarse a si mismo"], JSON_UNESCAPED_UNICODE));
         return $response->withStatus(409)->withHeader('Content-Type', 'application/json');
     }
 
@@ -287,7 +293,7 @@ $app->delete('/usuarios/{user_id}', function (Request $request,Response $respons
         $stmt->execute(['id' => $userId]);
         //consultar si existe el usuario
         if(!$stmt->fetch()) {
-            $response->getBody()->write(json_encode(["error" => "No existe el usuario"], JSON_UNESCAPED_UNICODE));
+            $response->getBody()->write(json_encode(["user_id" => "No existe el usuario"], JSON_UNESCAPED_UNICODE));
             return $response->withStatus(404)->withHeader('Content-Type', 'application/json');
         }
         //eliminar usuario
@@ -305,7 +311,7 @@ $app->delete('/usuarios/{user_id}', function (Request $request,Response $respons
         if(isset($db) && $db->inTransaction()) {
             $db->rollBack();
         }
-        $response->getBody()->write(json_encode(["error" => "Error de conexion"], JSON_UNESCAPED_UNICODE));
+        $response->getBody()->write(json_encode(["base_de_datos" => "Error de conexion"], JSON_UNESCAPED_UNICODE));
         return $response->withStatus(409)->withHeader('Content-Type', 'application/json');
     }
 

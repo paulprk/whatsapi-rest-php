@@ -38,7 +38,7 @@ $authMiddleware = function (Request $request, RequestHandler $handler): Response
     $respuesta = new \Slim\Psr7\Response();
 
     if($authHeader === '') {
-        $respuesta->getBody()->write(json_encode(["error" => "Token requerido"], JSON_UNESCAPED_UNICODE));
+        $respuesta->getBody()->write(json_encode(["token" => "Token requerido"], JSON_UNESCAPED_UNICODE));
         return $respuesta->withStatus(401)->withHeader('Content-Type', 'application/json');
     }
 
@@ -47,12 +47,12 @@ $authMiddleware = function (Request $request, RequestHandler $handler): Response
     try {
         $usuario = buscarUsuarioPorToken($token);   //llama a para buscar el usuario por su token
     } catch(PDOException $e) {
-        $respuesta->getBody()->write(json_encode(["error" => "Error de conexion"], JSON_UNESCAPED_UNICODE));
+        $respuesta->getBody()->write(json_encode(["base_de_datos" => "Error de conexion"], JSON_UNESCAPED_UNICODE));
         return $respuesta->withStatus(409)->withHeader('Content-Type', 'application/json');
     }
 
     if($usuario === null) {
-        $respuesta->getBody()->write(json_encode(["error" => "Token invalido o expirado"], JSON_UNESCAPED_UNICODE));
+        $respuesta->getBody()->write(json_encode(["token" => "Token invalido o expirado"], JSON_UNESCAPED_UNICODE));
         return $respuesta->withStatus(401)->withHeader('Content-Type', 'application/json');
     }
 
@@ -76,7 +76,7 @@ $authOpcional = function (Request $request, RequestHandler $handler): Response {
         $usuario = buscarUsuarioPorToken($token);
     } catch (PDOException $e) {
         $respuesta = new \Slim\Psr7\Response();
-        $respuesta->getBody()->write(json_encode(["error" => "Error de conexion"], JSON_UNESCAPED_UNICODE));
+        $respuesta->getBody()->write(json_encode(["base_de_datos" => "Error de conexion"], JSON_UNESCAPED_UNICODE));
         return $respuesta->withStatus(409)->withHeader('Content-Type', 'application/json');
     }
 

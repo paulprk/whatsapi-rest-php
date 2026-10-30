@@ -89,7 +89,17 @@ El header `Authorization` de la respuesta está habilitado para el navegador (`A
 
 ## Endpoints
 
-La API responde siempre JSON, incluidos los errores de rutas inexistentes (404) y de métodos no permitidos (405). Las fechas se devuelven en UTC con formato ISO 8601, por ejemplo `"2026-10-26T15:03:24Z"`. Los errores de validación se devuelven como un objeto indexado por el nombre del campo, por ejemplo `{"username": "Debe empezar con @", "password": "..."}`.
+La API responde siempre JSON, incluidos los errores de rutas inexistentes (404) y de métodos no permitidos (405). Las fechas se devuelven en UTC con formato ISO 8601, por ejemplo `"2026-10-26T15:03:24Z"`. Todos los errores se devuelven como un objeto indexado por el nombre del campo que los causó, por ejemplo `{"username": "Debe empezar con @", "password": "..."}`:
+
+| Clave | Cuándo aparece |
+|---|---|
+| `username`, `password`, `nombre`, `es_publico`, `mensaje`, `descripcion`, `color`, `esta_bloqueado`, `search`, `order`, `limit`, `offset`, `quantity` | El dato enviado en ese campo no es válido o no se pudo usar |
+| `user_id`, `message_id` | El id de la URL es inválido, no existe, o el usuario no tiene permiso sobre él |
+| `token` | Falta el token, es inválido o está vencido |
+| `campos` | No se envió ningún campo para modificar |
+| `base_de_datos` | Falló la conexión o la consulta |
+
+Si las credenciales del login son incorrectas, el error aparece en `username` y en `password`, para no revelar cuál de los dos falló.
 
 | Método y ruta | Login | Quién puede | Descripción |
 |---|---|---|---|
@@ -122,9 +132,9 @@ Parámetros opcionales en la URL:
 
 | Parámetro | Valor | Por defecto |
 |---|---|---|
-| `search` | Texto que debe contener el `username` o el `nombre` | sin filtro |
-| `order` | `asc` o `desc`, aplicado sobre el `username` | `asc` |
-| `limit` | Entero mayor a 0 | `10` |
+| `search` | Texto que debe contener el `username` o el `nombre` (sin distinguir mayúsculas; `%` y `_` se buscan como texto) | sin filtro |
+| `order` | `asc` o `desc`, aplicado sobre el `nombre` | `asc` |
+| `limit` | Entero mayor a 0 | sin límite: se listan todos |
 | `offset` | Entero mayor o igual a 0 | `0` |
 
 - Sin token (o con token inválido) se listan solo los usuarios con `es_publico = 1`.
@@ -153,8 +163,8 @@ Un chat une a dos usuarios (`creado_por` y `usuario_id`) y se busca sin importar
 |---|---|
 | `nombre` | Letras, números y espacios. Entre 3 y 15 caracteres |
 | `descripcion` | Letras, números y espacios. Entre 20 y 40 caracteres |
-| `color` | Hexadecimal de seis dígitos, por ejemplo `#FF8800` |
-| `esta_bloqueado` | `true` o `false` (también `1` o `0`). Una vez bloqueado, un chat **no se puede desbloquear** (409) |
+| `color` | Hexadecimal de 3 o 6 dígitos con `#`, por ejemplo `#F80` o `#FF8800` |
+| `esta_bloqueado` | `true` o `false`. Una vez bloqueado, un chat **no se puede desbloquear** (409) |
 
 Si no existe un chat entre el usuario logueado y `user_id`, responde 404.
 
@@ -162,7 +172,7 @@ Si no existe un chat entre el usuario logueado y `user_id`, responde 404.
 
 | Parámetro | Regla | Por defecto |
 |---|---|---|
-| `quantity` | Entero entre 1 y 10 (en la ruta) | `5` (ruta `/chats/{user_id}/historia`, sin cantidad) |
+| `quantity` | Entero mayor o igual a 1 (en la ruta). Máximo 10: si se pide más, se devuelven 10 | `5` (ruta `/chats/{user_id}/historia`, sin cantidad) |
 | `offset` | Entero mayor o igual a 0 (en la URL, opcional) | `0` |
 
 Si no existe un chat entre los dos usuarios, responde 404. Con `offset` se pasa a los mensajes anteriores.
@@ -177,13 +187,15 @@ Cosas que el enunciado no define y que se resolvieron así:
 - **El username no distingue mayúsculas.** `@Ana` y `@ana` son el mismo usuario, tanto para registrarse (no se puede repetir con otras mayúsculas) como para iniciar sesión. Confirmado por la cátedra.
 - **Una sola sesión por usuario.** Cada login genera un token nuevo y el anterior deja de servir.
 - **Fechas en UTC.** Se guardan y se devuelven en UTC con formato ISO 8601 (terminan en `Z`), para que cada cliente las muestre en su zona horaria.
-- **Un administrador no puede eliminarse a sí mismo** (409), para evitar dejar al sistema sin administradores.
+- **Un administrador puede eliminar a cualquier usuario, incluidos otros administradores, menos a sí mismo** (409), para evitar dejar al sistema sin administradores.
+- **`es_publico` y `esta_bloqueado`** aceptan `true`/`false`, `1`/`0`, `"1"`/`"0"` y `"true"`/`"false"`, sin distinguir mayúsculas.
 - **Errores de base de datos.** Si falla la conexión o una consulta, se responde 409 (la operación no se pudo realizar).
-- **Valores por defecto de la paginación:** `limit = 10` y `offset = 0`.
+- **Paginación opcional.** Sin `limit` se listan todos los usuarios, y `offset` vale `0` por defecto.
 - **Un usuario no puede enviarse mensajes a sí mismo** (400).
 - **Chat sin mensajes.** Si se eliminan todos los mensajes de un chat, el chat sigue existiendo (vacío) y `GET /chats` devuelve el último mensaje como `null`.
+- **Chat con el administrador.** Se usa el mismo `POST /chats/{user_id}`, indicando el id del admin: el chat aparece cuando el usuario le escribe, no se crea solo. Las opciones "modificar password" y "dar de baja" las resuelve el admin con `PUT /usuarios/{user_id}` y `DELETE /usuarios/{user_id}`.
 - **Nombre y descripción de un chat admiten espacios** (letras, números y espacios), porque el enunciado habla de "letras y números" y una descripción de 20 a 40 caracteres sin espacios no es razonable.
-- **Cantidad de la historia fuera de rango.** Un `quantity` menor a 1 o mayor a 10 se rechaza con 400 en lugar de recortarse.
+- **Cantidad de la historia.** El máximo es 10: un `quantity` mayor devuelve 10 mensajes, y uno menor a 1 o que no sea un entero se rechaza con 400.
 - **Identificadores estrictos.** Los ids de la URL deben ser enteros positivos escritos solo con dígitos; valores como `" 5"`, `"+5"` o `"05"` se rechazan con 400.
 - **Contraseñas.** Se guardan con `password_hash` (nunca en texto plano) y se comparan con `password_verify`.
 - **Dos middlewares de autenticación.** `$authMiddleware` exige token válido (401 si falta o es inválido). `$authOpcional` deja pasar al pedido como anónimo si no hay token o es inválido; se usa solo en `GET /usuarios`.

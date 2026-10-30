@@ -30,7 +30,7 @@ $app->delete('/mensajes/{message_id}', function(Request $request, Response $resp
 
         //mensaje no encontrado => error 404
         if(!$mensaje) {
-            return responder($response, ['error' => 'Mensaje no encontrado'], 404);
+            return responder($response, ['message_id' => 'Mensaje no encontrado'], 404);
         }
 
         //obtener atributos del request
@@ -39,7 +39,7 @@ $app->delete('/mensajes/{message_id}', function(Request $request, Response $resp
 
         //si no es admin, y no es el usuario logueado error 401
         if(!$esAdmin && (int) $mensaje['enviado_por'] !== $logueado) {
-            return responder($response, ['error' => 'Solo puede eliminar sus propios mensajes'], 401);
+            return responder($response, ['message_id' => 'Solo puede eliminar sus propios mensajes'], 401);
         }
 
         //eliminar mensaje => 200
@@ -49,7 +49,7 @@ $app->delete('/mensajes/{message_id}', function(Request $request, Response $resp
         return responder($response, ['mensaje' => 'Mensaje eliminado'], 200);
 
     } catch (PDOException $e) {
-        return responder($response, ['error' => 'No se pudo eliminar el mensaje'], 409);
+        return responder($response, ['base_de_datos' => 'No se pudo eliminar el mensaje'], 409);
     }
 
 

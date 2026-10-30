@@ -24,7 +24,7 @@ $app->post('/login',function (Request $request,Response $response) {
         $stmt->execute(['username' => $data['username']]);
         $usuario = $stmt->fetch();
         if(!$usuario || !password_verify($data['password'], $usuario['password'])) {
-            $response->getBody()->write(json_encode(["error" => "Credenciales invalidas"], JSON_UNESCAPED_UNICODE));
+            $response->getBody()->write(json_encode(["username" => "Credenciales invalidas", "password" => "Credenciales invalidas"], JSON_UNESCAPED_UNICODE));
             return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
         }
 
@@ -50,7 +50,7 @@ $app->post('/login',function (Request $request,Response $response) {
         return $response->withStatus(200)->withHeader('Content-Type', 'application/json')->withHeader('Authorization', 'Bearer ' . $token);
 
     } catch(PDOException $e) {
-        $response->getBody()->write(json_encode(["error" => "Error de conexion"], JSON_UNESCAPED_UNICODE));
+        $response->getBody()->write(json_encode(["base_de_datos" => "Error de conexion"], JSON_UNESCAPED_UNICODE));
         return $response->withStatus(409)->withHeader('Content-Type', 'application/json');
     }
 });
@@ -65,7 +65,7 @@ $app->post('/logout', function(Request $request,Response $response) {
         return $response->withStatus(200)->withHeader('Content-Type', 'application/json');
 
     } catch(PDOException $e) {
-        $response->getBody()->write(json_encode(["error" => "Error de conexion"], JSON_UNESCAPED_UNICODE));
+        $response->getBody()->write(json_encode(["base_de_datos" => "Error de conexion"], JSON_UNESCAPED_UNICODE));
         return $response->withStatus(409)->withHeader('Content-Type', 'application/json');
     }
 })->add($authMiddleware);

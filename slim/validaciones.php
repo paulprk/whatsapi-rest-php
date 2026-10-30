@@ -149,12 +149,12 @@ function validarDescripcionChat($descripcion): ?string
 }
 
 /**
- * Color en hexadecimal de seis dígitos, por ejemplo #FF8800.
+ * Color en hexadecimal de 3 o 6 dígitos, con #: por ejemplo #F80 o #FF8800.
  */
 function validarColor($color): ?string
 {
-    if (!is_string($color) || !preg_match('/^#[0-9a-fA-F]{6}$/', $color)) {
-        return 'Debe ser un código hexadecimal de seis dígitos, por ejemplo #FF8800';
+    if (!is_string($color) || !preg_match('/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/', $color)) {
+        return 'Debe ser un código hexadecimal de 3 o 6 dígitos, por ejemplo #F80 o #FF8800';
     }
     return null;
 }

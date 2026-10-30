@@ -66,7 +66,7 @@ $app->post('/chats/{user_id}', function (Request $request, Response $response, a
         $destinatario = $stmt->fetch();
         if (!$destinatario) {
             $db->rollBack();
-            return responderChat($response, ['error' => 'Usuario no encontrado'], 404);
+            return responderChat($response, ['user_id' => 'Usuario no encontrado'], 404);
         }
 
         $chat = buscarChatEntreUsuarios($db, $logueado, $userId);
@@ -86,7 +86,7 @@ $app->post('/chats/{user_id}', function (Request $request, Response $response, a
             $chatId = (int) $chat['id'];
             if ((int) $chat['esta_bloqueado'] === 1) {
                 $db->rollBack();
-                return responderChat($response, ['error' => 'No se pueden enviar mensajes a un chat bloqueado'], 409);
+                return responderChat($response, ['esta_bloqueado' => 'No se pueden enviar mensajes a un chat bloqueado'], 409);
             }
 
             $stmt = $db->prepare('SELECT COUNT(*) FROM mensaje WHERE chat_id = :chat_id');
@@ -105,7 +105,7 @@ $app->post('/chats/{user_id}', function (Request $request, Response $response, a
                 $emisorInicial = (int) $stmt->fetchColumn();
                 if ($emisorInicial === $logueado) {
                     $db->rollBack();
-                    return responderChat($response, ['error' => 'El otro usuario debe responder antes de enviar otro mensaje'], 409);
+                    return responderChat($response, ['mensaje' => 'El otro usuario debe responder antes de enviar otro mensaje'], 409);
                 }
             }
         }
@@ -128,7 +128,7 @@ $app->post('/chats/{user_id}', function (Request $request, Response $response, a
         if (isset($db) && $db->inTransaction()) {
             $db->rollBack();
         }
-        return responderChat($response, ['error' => 'No se pudo enviar el mensaje'], 409);
+        return responderChat($response, ['base_de_datos' => 'No se pudo enviar el mensaje'], 409);
     }
 })->add($authMiddleware);
 
@@ -171,7 +171,7 @@ $app->get('/chats', function (Request $request, Response $response) {
         ]);
         return responderChat($response, ['chats' => $stmt->fetchAll()]);
     } catch (PDOException $e) {
-        return responderChat($response, ['error' => 'No se pudieron obtener los chats'], 409);
+        return responderChat($response, ['base_de_datos' => 'No se pudieron obtener los chats'], 409);
     }
 })->add($authMiddleware);
 
@@ -193,7 +193,7 @@ $app->put('/chats/{user_id}', function (Request $request, Response $response, ar
     $permitidos = ['nombre', 'descripcion', 'esta_bloqueado', 'color'];
     $camposPresentes = array_intersect($permitidos, array_keys($data));
     if (!$camposPresentes) {
-        return responderChat($response, ['error' => 'Debe indicar al menos un campo para modificar'], 400);
+        return responderChat($response, ['campos' => 'Debe indicar al menos un campo para modificar'], 400);
     }
 
     // Cada validador devuelve null si está bien, o el mensaje de error de ese campo.
@@ -236,7 +236,7 @@ $app->put('/chats/{user_id}', function (Request $request, Response $response, ar
         $chat = buscarChatEntreUsuarios($db, $logueado, $userId);
         if (!$chat) {
             $db->rollBack();
-            return responderChat($response, ['error' => 'No existe un chat entre esos usuarios'], 404);
+            return responderChat($response, ['user_id' => 'No existe un chat entre esos usuarios'], 404);
         }
 
         // Una vez bloqueado, un chat no se puede desbloquear.
@@ -269,7 +269,7 @@ $app->put('/chats/{user_id}', function (Request $request, Response $response, ar
         if (isset($db) && $db->inTransaction()) {
             $db->rollBack();
         }
-        return responderChat($response, ['error' => 'No se pudo modificar el chat'], 409);
+        return responderChat($response, ['base_de_datos' => 'No se pudo modificar el chat'], 409);
     }
 })->add($authMiddleware);
 
@@ -287,7 +287,7 @@ $obtenerHistoriaChat = function (Request $request, Response $response, array $ar
     $offsetRaw = $queryParams['offset'] ?? '0';
 
     $errores = [];
-    $errorQuantity = validarEnteroEnRango($quantityRaw, 1, 10);   // entre 1 y 10
+    $errorQuantity = validarEnteroEnRango($quantityRaw, 1);       // entero mayor o igual a 1
     if ($errorQuantity !== null) {
         $errores['quantity'] = $errorQuantity;
     }
@@ -300,14 +300,14 @@ $obtenerHistoriaChat = function (Request $request, Response $response, array $ar
     }
 
     // Ya validados: es seguro convertirlos y escribirlos en el SQL.
-    $quantity = (int) $quantityRaw;
+    $quantity = min((int) $quantityRaw, 10);                  // maximo 10: si piden mas, se devuelven 10
     $offset = (int) $offsetRaw;
 
     try {
         $db = getDB();
         $chat = buscarChatEntreUsuarios($db, $logueado, $userId);
         if (!$chat) {
-            return responderChat($response, ['error' => 'No existe un chat entre esos usuarios'], 404);
+            return responderChat($response, ['user_id' => 'No existe un chat entre esos usuarios'], 404);
         }
 
         $stmt = $db->prepare(
@@ -322,7 +322,7 @@ $obtenerHistoriaChat = function (Request $request, Response $response, array $ar
         $mensajes = array_reverse($stmt->fetchAll());
         return responderChat($response, ['mensajes' => $mensajes]);
     } catch (PDOException $e) {
-        return responderChat($response, ['error' => 'No se pudo obtener la historia del chat'], 409);
+        return responderChat($response, ['base_de_datos' => 'No se pudo obtener la historia del chat'], 409);
     }
 };
 
